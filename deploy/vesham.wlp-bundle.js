@@ -7643,8 +7643,473 @@ __decorate19([
   property19.object()
 ], OrbitalCamera.prototype, "target", void 0);
 
+// node_modules/wle-stats/dist/components/stats-base.js
+import { Component as Component29 } from "@wonderlandengine/api";
+import { property as property20 } from "@wonderlandengine/api/decorators.js";
+
+// node_modules/wle-stats/dist/colors.js
+var BACKGROUND = "#222222";
+var CHART_BACKGROUND = "#333333";
+var MAIN_COLOR = "#e8008a";
+
+// node_modules/wle-stats/dist/stats.js
+var StatsGraph = class {
+  /** Graph background color. */
+  background = CHART_BACKGROUND;
+  /** Graph foreground color, i.e., the column color. */
+  main = MAIN_COLOR;
+  /** Width of a column, in **physical pixels**. @hidden */
+  _columnWidth = 1;
+  /** Inner canvas. @hidden */
+  _canvas;
+  /** 2d rendering context for graph plot. @hidden */
+  _context;
+  /** Minimum y-axis value. @hidden */
+  _min = 0;
+  /** Maximum y-axis value. @hidden */
+  _max = 1;
+  /** If `true`, the graph needs to be cleared. @hidden */
+  _dirty = true;
+  /**
+   * Create a new stats instance.
+   *
+   * @param opts The initial options.
+   */
+  constructor(opts = {}) {
+    this._canvas = document.createElement("canvas");
+    const context = this._canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Stats(): Failed to retrieve 2d context");
+    }
+    this._context = context;
+    const { minY = 0, maxY = 120 } = opts;
+    this.min = minY;
+    this.max = maxY;
+    this.setDimensions(100, 40);
+  }
+  /**
+   * Update the plot with a new value.
+   *
+   * @param value The value to plot.
+   */
+  update(value) {
+    if (this._dirty)
+      this.clear();
+    const width = this._canvas.width - this._columnWidth;
+    const height = this._canvas.height;
+    this._context.drawImage(this._canvas, this._columnWidth, 0, width, height, 0, 0, width, height);
+    this._context.fillStyle = this.background;
+    this._context.fillRect(width, 0, this._columnWidth, height);
+    this._context.fillStyle = this.main;
+    const yScale = (value - this.min) / (this.max - this.min);
+    const y = yScale * height;
+    this._context.fillRect(width, height - y, this._columnWidth, y);
+  }
+  /**
+   * Clear the plot, i.e., re-draw the background color.
+   *
+   * @returns Reference to self (for method chaining).
+   */
+  clear() {
+    this._context.fillStyle = this.background;
+    this._context.fillRect(0, 0, this._canvas.width, this._canvas.height);
+    this._dirty = false;
+    return this;
+  }
+  /**
+   * Update the graph width & height.
+   *
+   * @param width The new width, in **CSS pixels**.
+   * @param height The new height, in **CSS pixels**.
+   *
+   * @returns Reference to self (for method chaining).
+   */
+  setDimensions(width, height) {
+    this._canvas.width = width * devicePixelRatio;
+    this._canvas.height = height * devicePixelRatio;
+    this._dirty = true;
+    return this;
+  }
+  needsClear() {
+    this._dirty = true;
+    return this;
+  }
+  get min() {
+    return this._min;
+  }
+  set min(value) {
+    this._min = value;
+    this.needsClear();
+  }
+  get max() {
+    return this._max;
+  }
+  set max(value) {
+    this._max = value;
+    this.needsClear();
+  }
+  /** Graph canvas. */
+  get canvas() {
+    return this._canvas;
+  }
+};
+
+// node_modules/wle-stats/dist/components/stats-base.js
+var __decorate20 = function(decorators, target, key, desc) {
+  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+  if (typeof Reflect === "object" && typeof Reflect.decorate === "function")
+    r = Reflect.decorate(decorators, target, key, desc);
+  else
+    for (var i = decorators.length - 1; i >= 0; i--)
+      if (d = decorators[i])
+        r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+  return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var StatsType;
+(function(StatsType2) {
+  StatsType2[StatsType2["Fps"] = 0] = "Fps";
+  StatsType2[StatsType2["Milliseconds"] = 1] = "Milliseconds";
+})(StatsType || (StatsType = {}));
+var StatsComponentBase = class extends Component29 {
+  /** Stats type. */
+  statsType = 0;
+  /**
+   * Rate, **in milliseconds**, at which the chart is updated.
+   *
+   * @note The value will be averaged over this time.
+   */
+  updateRateMs = 500;
+  /** Stats object. @hidden */
+  _stats = new StatsGraph();
+  /** Last computed value (FPS / ms). @hidden */
+  _value = 0;
+  /** Last computed text (FPS / ms). @hidden */
+  _text = "";
+  /** Timestamp starting at the last update. @hidden */
+  _startTime = 0;
+  /** Frame count starting at the last update. @hidden */
+  _frame = 0;
+  /* Pre/Post render hook. */
+  /** Triggered after the scene is rendered. @hidden */
+  _onPostRender = this._update.bind(this);
+  /** @override */
+  onActivate() {
+    this.reset();
+    this.engine.scene.onPostRender.add(this._onPostRender);
+  }
+  /** @override */
+  onDeactivate() {
+    this.engine.scene.onPostRender.remove(this._onPostRender);
+  }
+  reset() {
+    this._startTime = performance.now();
+    this._frame = 0;
+    return this;
+  }
+  set minY(value) {
+    if (this._stats)
+      this._stats.min = value;
+  }
+  set maxY(value) {
+    if (this._stats)
+      this._stats.max = value;
+  }
+  _update() {
+    ++this._frame;
+    const elapsedMs = performance.now() - this._startTime;
+    if (elapsedMs < this.updateRateMs)
+      return;
+    switch (this.statsType) {
+      case StatsType.Fps:
+        this._value = this._frame / (elapsedMs * 1e-3);
+        this._text = `FPS: ${this._value.toFixed(1)}`;
+        break;
+      case StatsType.Milliseconds:
+        this._value = elapsedMs / this._frame;
+        this._text = `${this._value.toFixed(1)} milliseconds`;
+        break;
+      default:
+        throw new Error(`StatsComponent.update(): Unknown statsType ${this.statsType}`);
+    }
+    this._stats.update(this._value);
+    this.reset();
+  }
+};
+__decorate20([
+  property20.enum(["fps", "milliseconds"], 0)
+], StatsComponentBase.prototype, "statsType", void 0);
+__decorate20([
+  property20.float(500)
+], StatsComponentBase.prototype, "updateRateMs", void 0);
+__decorate20([
+  property20.float(0)
+], StatsComponentBase.prototype, "minY", null);
+__decorate20([
+  property20.float(120)
+], StatsComponentBase.prototype, "maxY", null);
+
+// node_modules/wle-stats/dist/components/stats-html-component.js
+import { property as property21 } from "@wonderlandengine/api/decorators.js";
+var __decorate21 = function(decorators, target, key, desc) {
+  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+  if (typeof Reflect === "object" && typeof Reflect.decorate === "function")
+    r = Reflect.decorate(decorators, target, key, desc);
+  else
+    for (var i = decorators.length - 1; i >= 0; i--)
+      if (d = decorators[i])
+        r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+  return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+function createHeader() {
+  const text = document.createElement("p");
+  text.style.margin = "0";
+  text.style.padding = "6px";
+  text.style.fontFamily = "monospace";
+  text.style.fontWeight = "bold";
+  text.style.color = MAIN_COLOR;
+  return text;
+}
+function template(canvas2) {
+  const text = createHeader();
+  const container = document.createElement("div");
+  container.style.background = BACKGROUND;
+  container.style.margin = "4px";
+  container.appendChild(text);
+  container.appendChild(canvas2);
+  return { container, text };
+}
+var StatsHtmlComponent = class extends StatsComponentBase {
+  /**
+   * HTML id of the parent container. When empty,
+   * defaults to `document.body`.
+   *
+   * If no parent is provided, the element will by default
+   * use `position: fixed` to be visible on top of everything.
+   */
+  parentContainer = "";
+  /* HTML layout. */
+  /** <div> enclosing the stats canvas. @hidden */
+  _container = null;
+  /** <p> containing the text inside the header. @hidden */
+  _textElement = null;
+  /** @hidden */
+  constructor() {
+    super(...arguments);
+    const { container, text } = template(this._stats.canvas);
+    this._container = container;
+    this._textElement = text;
+  }
+  /** @override */
+  onActivate() {
+    const parent = this.parentContainer ? document.getElementById(this.parentContainer) : null;
+    if (!parent) {
+      this._container.style.position = "fixed";
+      this._container.style.top = "0";
+      this._container.style.left = "0";
+      this._container.style.zIndex = "1000";
+    }
+    (parent ?? document.body).append(this._container);
+    super.onActivate();
+  }
+  /** @override */
+  onDeactivate() {
+    this._container.remove();
+    super.onDeactivate();
+  }
+  update() {
+    this._textElement.innerHTML = this._text;
+  }
+  /** Column color. Defaults to Wonderland Engine purple. */
+  set color(value) {
+    if (!this._textElement || !this._stats)
+      return;
+    this._textElement.style.color = value;
+    this._stats.main = value;
+    this._stats.needsClear();
+  }
+};
+/** @override */
+__publicField(StatsHtmlComponent, "TypeName", "stats-html");
+/** @override */
+__publicField(StatsHtmlComponent, "Properties", Object.assign({}, StatsComponentBase.Properties));
+__decorate21([
+  property21.string()
+], StatsHtmlComponent.prototype, "parentContainer", void 0);
+__decorate21([
+  property21.string(MAIN_COLOR)
+], StatsHtmlComponent.prototype, "color", null);
+
+// node_modules/wle-stats/dist/components/stats3d-component.js
+import { TextComponent, Texture } from "@wonderlandengine/api";
+import { property as property22 } from "@wonderlandengine/api/decorators.js";
+var __decorate22 = function(decorators, target, key, desc) {
+  var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+  if (typeof Reflect === "object" && typeof Reflect.decorate === "function")
+    r = Reflect.decorate(decorators, target, key, desc);
+  else
+    for (var i = decorators.length - 1; i >= 0; i--)
+      if (d = decorators[i])
+        r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+  return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var Mode;
+(function(Mode2) {
+  Mode2[Mode2["Static"] = 0] = "Static";
+  Mode2[Mode2["Overlay"] = 1] = "Overlay";
+})(Mode || (Mode = {}));
+var POSITION_SPEED = 5;
+var ROTATION_SPEED = 2;
+var _pointA = vec3_exports.create();
+var _pointB = vec3_exports.create();
+var _quatA = quat_exports.create();
+var _quatB = quat_exports.create();
+var Stats3dComponent = class extends StatsComponentBase {
+  /**
+   * If this is set to {@linl Mode.Static}, the object position
+   * will not be updated.
+   *
+   * If it's set to {@linl Mode.Overlay}, the component will follow
+   * the left eye.
+   */
+  mode = 0;
+  /** Object containing a {@link MeshComponent} to update. */
+  mesh = null;
+  /** Object containing a {@link TextComponent} to update. */
+  text = null;
+  /**
+   * Graph width, in CSS pixels. Higher values will lead to sharper visual results.
+   *
+   * @note The graph is uploaded as a texture in the texture atlas. Thus, using large
+   * values can lead to poor performance as well as preventing to upload other textures.
+   */
+  width = 200;
+  /**
+   * Graph height, in CSS pixels. Higher values will lead to sharper visual results.
+   *
+   * @note The graph is uploaded as a texture in the texture atlas. Thus, using large
+   * values can lead to poor performance as well as preventing to upload other textures.
+   */
+  height = 150;
+  /**
+   * Distance at which the panel will be placed.
+   *
+   * @note Affects the component only when using {@link Mode.Overlay}.
+   */
+  distance = 5;
+  /**
+   * Speed at which the panel will move when turning the camera.
+   *
+   * @note Affects the component only when using {@link Mode.Overlay}.
+   */
+  positionSpeed = 1;
+  /**
+   * Speed at which the panel will rotate when turning the camera, until aligned.
+   *
+   * @note Affects the component only when using {@link Mode.Overlay}.
+   */
+  rotationSpeed = 1;
+  /** Texture to update. @hidden */
+  _texture = null;
+  /** Cached reference of the text component. @hidden */
+  _textComp = null;
+  /** Cached reference of the material. @hidden */
+  _material = null;
+  /** Cached views. @hidden */
+  _views = [];
+  /** @override */
+  onActivate() {
+    this._stats.setDimensions(this.width, this.height);
+    const aspect = this._stats.canvas.width / this._stats.canvas.height;
+    const meshObject = this.mesh ?? this.object;
+    const mesh = meshObject.getComponent("mesh");
+    if (!mesh)
+      throw new Error("no mesh component found on object");
+    if (!mesh.material)
+      throw new Error("no mesh has no material attached");
+    const scale6 = meshObject.getScalingLocal();
+    meshObject.setScalingLocal([scale6[0] * aspect, scale6[1], scale6[2]]);
+    this._texture = new Texture(this.engine, this._stats.canvas);
+    this._material = mesh.material;
+    this._material.diffuseTexture = this._texture;
+    this._material.flatTexture = this._texture;
+    this._textComp = this.text?.getComponent(TextComponent) ?? null;
+    this._views = this.engine.scene.activeViews;
+    super.onActivate();
+  }
+  /** @override */
+  onDeactivate() {
+    this._texture?.destroy();
+    if (this._material) {
+      this._material.diffuseTexture = null;
+      this._material.flatTexture = null;
+    }
+    super.onDeactivate();
+  }
+  /** @override */
+  update(dt) {
+    if (this.mode === Mode.Overlay)
+      this._followTarget(dt);
+    const canvas2 = this._stats.canvas;
+    this._texture.updateSubImage(0, 0, canvas2.width, canvas2.height);
+    if (this._textComp)
+      this._textComp.text = this._text;
+  }
+  /**
+   * Make the panel follow the camera.
+   *
+   * @param dt Delta time.
+   *
+   * @hidden
+   */
+  _followTarget(dt) {
+    const vrDisabled = this.engine.xr === null || this._views.length < 2;
+    const camera = (vrDisabled ? this._views[0] : this._views[1]).object;
+    const posLerp = dt * POSITION_SPEED * Math.max(this.positionSpeed, 1e-4);
+    camera.getForwardWorld(_pointA);
+    vec3_exports.scale(_pointA, _pointA, this.distance);
+    const targetPos = camera.getPositionWorld(_pointB);
+    vec3_exports.add(targetPos, targetPos, _pointA);
+    const pos = this.object.getPositionWorld(_pointA);
+    vec3_exports.lerp(pos, pos, targetPos, posLerp);
+    this.object.setPositionWorld(pos);
+    const rotLerp = dt * ROTATION_SPEED * Math.max(this.rotationSpeed, 1e-4);
+    const targetRot = camera.getRotationWorld(_quatA);
+    const rot = this.object.getRotationWorld(_quatB);
+    quat_exports.lerp(rot, rot, targetRot, rotLerp);
+    this.object.setRotationWorld(rot);
+  }
+};
+/** @override */
+__publicField(Stats3dComponent, "TypeName", "stats-3d");
+/** @override */
+__publicField(Stats3dComponent, "Properties", Object.assign({}, StatsComponentBase.Properties));
+__decorate22([
+  property22.enum(["Static", "Overlay"], 0)
+], Stats3dComponent.prototype, "mode", void 0);
+__decorate22([
+  property22.object()
+], Stats3dComponent.prototype, "mesh", void 0);
+__decorate22([
+  property22.object()
+], Stats3dComponent.prototype, "text", void 0);
+__decorate22([
+  property22.int(200)
+], Stats3dComponent.prototype, "width", void 0);
+__decorate22([
+  property22.int(150)
+], Stats3dComponent.prototype, "height", void 0);
+__decorate22([
+  property22.float(5)
+], Stats3dComponent.prototype, "distance", void 0);
+__decorate22([
+  property22.float(1)
+], Stats3dComponent.prototype, "positionSpeed", void 0);
+__decorate22([
+  property22.float(1)
+], Stats3dComponent.prototype, "rotationSpeed", void 0);
+
 // js/button.js
-import { Component as Component29, InputComponent as InputComponent2, MeshComponent as MeshComponent3, Property as Property2 } from "@wonderlandengine/api";
+import { Component as Component30, InputComponent as InputComponent2, MeshComponent as MeshComponent3, Property as Property2 } from "@wonderlandengine/api";
 function hapticFeedback(object, strength, duration) {
   const input = object.getComponent(InputComponent2);
   if (input && input.xrInputSource) {
@@ -7653,7 +8118,7 @@ function hapticFeedback(object, strength, duration) {
       gamepad.hapticActuators[0].pulse(strength, duration);
   }
 }
-var ButtonComponent = class extends Component29 {
+var ButtonComponent = class extends Component30 {
   static onRegister(engine) {
     engine.registerComponent(AudioSource);
     engine.registerComponent(CursorTarget);
@@ -7730,58 +8195,227 @@ __publicField(ButtonComponent, "Properties", {
 });
 
 // js/collisionTest.ts
-import { Component as Component30, CollisionComponent as CollisionComponent3 } from "@wonderlandengine/api";
-import { property as property20 } from "@wonderlandengine/api/decorators.js";
-var CollisionTest = class extends Component30 {
+import { Component as Component31, CollisionComponent as CollisionComponent3, AnimationComponent, Emitter as Emitter9 } from "@wonderlandengine/api";
+import { property as property23 } from "@wonderlandengine/api/decorators.js";
+var _CollisionTest = class extends Component31 {
   leftHand;
   rightHand;
-  leftText;
-  rightText;
+  puzzleText;
+  songAudio;
   successAudio;
-  // string for audioClip source in WLE? No, property type handles it. Wait, button.js treated it as property object to get source. 
+  puzzleIntervalGap;
+  pathakaUI;
+  mushtiUI;
+  ardhachandramUI;
+  animationObject;
+  disableSlowMotion;
+  waitForExternalTrigger;
   rightCollisionComp = null;
   leftCollisionComp = null;
+  animationComp = null;
   currentLeftMudra = null;
   currentRightMudra = null;
   targetMudra = "";
   mudraOptions = ["Pathaka", "Mushti", "Ardhachandram"];
   soundSuccess = null;
+  songSource = null;
+  timeSinceLastPuzzle = 0;
+  hasStartedOnce = false;
+  isPuzzleActive = false;
+  fadeInterval = null;
+  pitchInterval = null;
+  animSpeedInterval = null;
+  eKeyPressed = false;
   start() {
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "e" || e.key === "E") {
+        this.eKeyPressed = true;
+      }
+    });
     if (this.leftHand) {
       this.leftCollisionComp = this.leftHand.getComponent(CollisionComponent3);
     }
     if (this.rightHand) {
       this.rightCollisionComp = this.rightHand.getComponent(CollisionComponent3);
     }
+    if (this.animationObject) {
+      this.animationComp = this.animationObject.getComponent(AnimationComponent);
+    }
+    this.disableAllMudraUI();
     if (this.successAudio) {
       this.soundSuccess = this.object.addComponent(AudioSource, {
         src: this.successAudio,
         hrtf: true
+        // Keep spatial for SFX
       });
     }
-    this.setNewTarget();
+    const songPath = this.songAudio || "kananashort.opus";
+    if (songPath) {
+      this.songSource = new Audio(songPath);
+      this.songSource.loop = true;
+      this.songSource.volume = 1;
+      this.songSource.preload = "auto";
+      this.songSource.load();
+      this.songSource.preservesPitch = false;
+      if (this.songSource.mozPreservesPitch !== void 0)
+        this.songSource.mozPreservesPitch = false;
+      if (this.songSource.webkitPreservesPitch !== void 0)
+        this.songSource.webkitPreservesPitch = false;
+      if (!this.waitForExternalTrigger) {
+        this.waitForInteraction();
+      }
+    }
+    if (this.puzzleText) {
+      this.updateText(this.puzzleText, "Enjoy the Music... (Click to Start)");
+    }
+  }
+  playIntroSong() {
+    console.log("External trigger received. Attempting auto-play...");
+    if (this.songSource) {
+      const promise = this.songSource.play();
+      if (promise !== void 0) {
+        promise.then(() => {
+          console.log("Song started playing immediately.");
+          if (this.puzzleText) {
+            this.updateText(this.puzzleText, "Enjoy the Music...");
+          }
+        }).catch((e) => {
+          console.warn("Auto-play blocked. Waiting for interaction.", e);
+          this.updateText(this.puzzleText, "Click/Trigger to Start Music");
+          this.waitForInteraction();
+        });
+      } else {
+        this.waitForInteraction();
+      }
+    }
+  }
+  waitForInteraction() {
+    const removeListeners = () => {
+      window.removeEventListener("click", playAudio);
+      window.removeEventListener("touchstart", playAudio);
+      window.removeEventListener("keydown", playAudio);
+      window.removeEventListener("mousedown", playAudio);
+    };
+    const playAudio = () => {
+      if (this.songSource) {
+        const promise = this.songSource.play();
+        if (promise !== void 0) {
+          promise.then(() => {
+            console.log("Song started playing after interaction.");
+            removeListeners();
+            if (this.puzzleText) {
+              this.updateText(this.puzzleText, "Enjoy the Music...");
+            }
+          }).catch((e) => {
+            console.warn("Song play failed on interaction (will retry on next):", e);
+          });
+        } else {
+          removeListeners();
+        }
+      }
+    };
+    window.addEventListener("click", playAudio);
+    window.addEventListener("touchstart", playAudio);
+    window.addEventListener("keydown", playAudio);
+    window.addEventListener("mousedown", playAudio);
   }
   update(dt) {
-    if (this.leftCollisionComp) {
-      this.currentLeftMudra = this.detectMudra(this.leftCollisionComp);
+    if (!this.isPuzzleActive) {
+      this.timeSinceLastPuzzle += dt;
     }
-    if (this.rightCollisionComp) {
-      this.currentRightMudra = this.detectMudra(this.rightCollisionComp);
+    if (!this.isPuzzleActive && this.timeSinceLastPuzzle >= this.puzzleIntervalGap) {
+      this.startPuzzle();
     }
-    if (this.currentLeftMudra === this.targetMudra && this.currentRightMudra === this.targetMudra) {
-      console.log("WIN! Both hands matched:", this.targetMudra);
-      if (this.soundSuccess) {
-        this.soundSuccess.play();
+    if (this.isPuzzleActive) {
+      if (this.eKeyPressed) {
+        this.eKeyPressed = false;
+        this.resolvePuzzle();
+        return;
       }
-      this.setNewTarget();
+      if (this.leftCollisionComp) {
+        this.currentLeftMudra = this.detectMudra(this.leftCollisionComp);
+      }
+      if (this.rightCollisionComp) {
+        this.currentRightMudra = this.detectMudra(this.rightCollisionComp);
+      }
+      if (this.currentLeftMudra === this.targetMudra && this.currentRightMudra === this.targetMudra) {
+        this.resolvePuzzle();
+      }
     }
+  }
+  startPuzzle() {
+    console.log("Starting Puzzle!");
+    this.isPuzzleActive = true;
+    if (this.songSource) {
+      if (this.disableSlowMotion) {
+        this.fadeVolume(this.songSource, 0, 500);
+      } else {
+        this.tweenPlaybackRate(this.songSource, 0.75, 500);
+        this.fadeVolume(this.songSource, 0.5, 500);
+        if (this.animationComp) {
+          this.animationComp.speed = 0.2;
+        }
+      }
+    }
+    _CollisionTest.onPuzzleStateChange.notify(true);
+    this.setNewTarget();
+    this.showPicture();
+  }
+  disableAllMudraUI() {
+    this.setChildrenActive(this.pathakaUI, false);
+    this.setChildrenActive(this.mushtiUI, false);
+    this.setChildrenActive(this.ardhachandramUI, false);
+  }
+  setChildrenActive(obj, active) {
+    if (!obj)
+      return;
+    obj.active = active;
+    obj.getComponents().forEach((comp) => {
+      comp.active = active;
+    });
+    const children = obj.children;
+    for (const child of children) {
+      this.setChildrenActive(child, active);
+    }
+  }
+  showPicture() {
+    this.disableAllMudraUI();
+    if (this.targetMudra === "Pathaka") {
+      this.setChildrenActive(this.pathakaUI, true);
+    } else if (this.targetMudra === "Mushti") {
+      this.setChildrenActive(this.mushtiUI, true);
+    } else if (this.targetMudra === "Ardhachandram") {
+      this.setChildrenActive(this.ardhachandramUI, true);
+    }
+  }
+  setBlackAndWhite() {
+  }
+  resolvePuzzle() {
+    console.log("Puzzle Solved!");
+    this.disableAllMudraUI();
+    this.setBlackAndWhite();
+    this.isPuzzleActive = false;
+    this.timeSinceLastPuzzle = 0;
+    _CollisionTest.onPuzzleStateChange.notify(false);
+    if (this.songSource) {
+      if (this.disableSlowMotion) {
+        this.fadeVolume(this.songSource, 1, 500);
+      } else {
+        this.tweenPlaybackRate(this.songSource, 1, 500);
+        this.fadeVolume(this.songSource, 1, 500);
+        this.animationComp.speed = 1;
+      }
+    }
+    if (this.soundSuccess) {
+      this.soundSuccess.play();
+    }
+    this.updateText(this.puzzleText, "Good! Enjoy the Music...");
   }
   setNewTarget() {
     const randomIndex = Math.floor(Math.random() * this.mudraOptions.length);
     this.targetMudra = this.mudraOptions[randomIndex];
     console.log("New Target:", this.targetMudra);
-    this.updateText(this.leftText, this.targetMudra);
-    this.updateText(this.rightText, this.targetMudra);
+    this.updateText(this.puzzleText, "Mudra: " + this.targetMudra);
   }
   updateText(obj, text) {
     if (!obj)
@@ -7816,37 +8450,257 @@ var CollisionTest = class extends Component30 {
       return "Ardhachandram";
     return null;
   }
+  tweenPlaybackRate(audio, targetRate, duration) {
+    if (this.pitchInterval) {
+      window.clearInterval(this.pitchInterval);
+      this.pitchInterval = null;
+    }
+    if (!audio)
+      return;
+    const startRate = audio.playbackRate;
+    const startTime = performance.now();
+    this.pitchInterval = window.setInterval(() => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      audio.playbackRate = startRate + (targetRate - startRate) * t;
+      if (t >= 1) {
+        if (this.pitchInterval) {
+          window.clearInterval(this.pitchInterval);
+          this.pitchInterval = null;
+        }
+        audio.playbackRate = targetRate;
+      }
+    }, 50);
+  }
+  fadeVolume(audio, targetVolume, duration) {
+    if (this.fadeInterval) {
+      window.clearInterval(this.fadeInterval);
+      this.fadeInterval = null;
+    }
+    if (!audio)
+      return;
+    const startVolume = audio.volume;
+    const startTime = performance.now();
+    this.fadeInterval = window.setInterval(() => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      audio.volume = startVolume + (targetVolume - startVolume) * t;
+      if (t >= 1) {
+        if (this.fadeInterval) {
+          window.clearInterval(this.fadeInterval);
+          this.fadeInterval = null;
+        }
+        audio.volume = targetVolume;
+      }
+    }, 50);
+  }
+  tweenAnimationSpeed(targetSpeed, duration) {
+    if (this.animSpeedInterval) {
+      window.clearInterval(this.animSpeedInterval);
+      this.animSpeedInterval = null;
+    }
+    if (this.animationComp) {
+      const startSpeed = this.animationComp.speed || 1;
+      const activeState = this.animationComp;
+      if (activeState) {
+        const startSpeed2 = activeState.speed;
+        const startTime = performance.now();
+        this.animSpeedInterval = window.setInterval(() => {
+          const elapsed = performance.now() - startTime;
+          const t = Math.min(elapsed / duration, 1);
+          activeState.speed = startSpeed2 + (targetSpeed - startSpeed2) * t;
+          if (t >= 1) {
+            if (this.animSpeedInterval) {
+              window.clearInterval(this.animSpeedInterval);
+              this.animSpeedInterval = null;
+            }
+            activeState.speed = targetSpeed;
+          }
+        }, 50);
+      }
+    }
+  }
 };
+var CollisionTest = _CollisionTest;
 __publicField(CollisionTest, "TypeName", "collisionTest");
+__publicField(CollisionTest, "onPuzzleStateChange", new Emitter9());
 __decorateClass([
-  property20.object()
+  property23.object()
 ], CollisionTest.prototype, "leftHand", 2);
 __decorateClass([
-  property20.object()
+  property23.object()
 ], CollisionTest.prototype, "rightHand", 2);
 __decorateClass([
-  property20.object()
-], CollisionTest.prototype, "leftText", 2);
+  property23.object()
+], CollisionTest.prototype, "puzzleText", 2);
 __decorateClass([
-  property20.object()
-], CollisionTest.prototype, "rightText", 2);
+  property23.string("kananashort.opus")
+], CollisionTest.prototype, "songAudio", 2);
 __decorateClass([
-  property20.audioClip()
+  property23.audioClip()
 ], CollisionTest.prototype, "successAudio", 2);
+__decorateClass([
+  property23.float(7)
+], CollisionTest.prototype, "puzzleIntervalGap", 2);
+__decorateClass([
+  property23.object()
+], CollisionTest.prototype, "pathakaUI", 2);
+__decorateClass([
+  property23.object()
+], CollisionTest.prototype, "mushtiUI", 2);
+__decorateClass([
+  property23.object()
+], CollisionTest.prototype, "ardhachandramUI", 2);
+__decorateClass([
+  property23.object()
+], CollisionTest.prototype, "animationObject", 2);
+__decorateClass([
+  property23.bool(false)
+], CollisionTest.prototype, "disableSlowMotion", 2);
+__decorateClass([
+  property23.bool(false)
+], CollisionTest.prototype, "waitForExternalTrigger", 2);
+
+// js/elephantSneeze.ts
+import { Component as Component32 } from "@wonderlandengine/api";
+import { property as property24 } from "@wonderlandengine/api/decorators.js";
+var Eplephantsneeze = class extends Component32 {
+  minInterval;
+  maxInterval;
+  audioSource = null;
+  timer = 0;
+  nextSneezeTime = 0;
+  isPuzzleActive = false;
+  start() {
+    this.audioSource = this.object.getComponent(AudioSource);
+    if (!this.audioSource) {
+      console.warn("Eplephantsneeze: No AudioSource component found on object!");
+    }
+    CollisionTest.onPuzzleStateChange.add((active) => {
+      this.isPuzzleActive = active;
+    });
+    this.scheduleNextSneeze();
+  }
+  update(dt) {
+    if (this.isPuzzleActive)
+      return;
+    this.timer += dt;
+    if (this.timer >= this.nextSneezeTime) {
+      this.playSneeze();
+    }
+  }
+  playSneeze() {
+    if (this.audioSource) {
+      this.audioSource.play();
+    }
+    this.scheduleNextSneeze();
+  }
+  scheduleNextSneeze() {
+    this.timer = 0;
+    this.nextSneezeTime = this.minInterval + Math.random() * (this.maxInterval - this.minInterval);
+  }
+};
+__publicField(Eplephantsneeze, "TypeName", "eplephantsneeze");
+__decorateClass([
+  property24.float(5)
+], Eplephantsneeze.prototype, "minInterval", 2);
+__decorateClass([
+  property24.float(15)
+], Eplephantsneeze.prototype, "maxInterval", 2);
+
+// js/intro.ts
+import { Component as Component33 } from "@wonderlandengine/api";
+import { property as property25 } from "@wonderlandengine/api/decorators.js";
+var Intro = class extends Component33 {
+  cin1;
+  cin2;
+  user;
+  spawnPoint;
+  collisionTestObject;
+  start() {
+    this.runSequence();
+  }
+  runSequence() {
+    this.setObjectActive(this.cin1, false);
+    this.setObjectActive(this.cin2, false);
+    this.setObjectActive(this.cin1, true);
+    setTimeout(() => {
+      this.setObjectActive(this.cin1, false);
+      this.setObjectActive(this.cin2, true);
+    }, 1e4);
+    setTimeout(() => {
+      this.setObjectActive(this.cin2, false);
+      this.stopIntroMusic();
+      this.teleportUser();
+      this.startGame();
+    }, 2e4);
+  }
+  stopIntroMusic() {
+    const audio = this.object.getComponent(AudioSource);
+    if (audio) {
+      audio.stop();
+    }
+  }
+  setObjectActive(obj, active) {
+    if (obj) {
+      for (const comp of obj.getComponents()) {
+        comp.active = active;
+      }
+      for (const child of obj.children) {
+        this.setObjectActive(child, active);
+      }
+    }
+  }
+  teleportUser() {
+    if (this.user && this.spawnPoint) {
+      this.user.setTransformLocal(this.spawnPoint.getTransformLocal());
+    }
+  }
+  startGame() {
+    if (this.collisionTestObject) {
+      const comp = this.collisionTestObject.getComponent(CollisionTest);
+      if (comp) {
+        comp.playIntroSong();
+      }
+    }
+  }
+};
+__publicField(Intro, "TypeName", "intro");
+__decorateClass([
+  property25.object()
+], Intro.prototype, "cin1", 2);
+__decorateClass([
+  property25.object()
+], Intro.prototype, "cin2", 2);
+__decorateClass([
+  property25.object()
+], Intro.prototype, "user", 2);
+__decorateClass([
+  property25.object()
+], Intro.prototype, "spawnPoint", 2);
+__decorateClass([
+  property25.object()
+], Intro.prototype, "collisionTestObject", 2);
 
 // js/index.js
 function js_default(engine) {
   engine.registerComponent(AudioListener);
+  engine.registerComponent(AudioSource);
   engine.registerComponent(Cursor);
   engine.registerComponent(CursorTarget);
   engine.registerComponent(FingerCursor);
+  engine.registerComponent(FixedFoveation);
   engine.registerComponent(HandTracking);
   engine.registerComponent(MouseLookComponent);
   engine.registerComponent(PlayerHeight);
+  engine.registerComponent(TargetFramerate);
   engine.registerComponent(TeleportComponent);
   engine.registerComponent(VrModeActiveSwitch);
+  engine.registerComponent(StatsHtmlComponent);
   engine.registerComponent(ButtonComponent);
   engine.registerComponent(CollisionTest);
+  engine.registerComponent(Eplephantsneeze);
+  engine.registerComponent(Intro);
 }
 export {
   js_default as default
